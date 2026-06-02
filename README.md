@@ -16,29 +16,18 @@
 
 
 
+## 系统架构
+
 ```mermaid
-
 graph TD
+    Browser["浏览器 (shop.html)"] -->|JWT 认证| UserService["用户服务 (5173)"]
+    UserService -->|HttpClient| ProductService["商品服务 (5002)"]
+    UserService -->|HttpClient| OrderService["订单服务 (5003)"]
+    UserService -->|HttpClient| PaymentService["支付服务 (5004)"]
+    PaymentService -->|HttpClient| OrderService
+    OrderService -->|HttpClient| ProductService
 
-&#x20;   Browser\["浏览器 (shop.html)"]
-
-&#x20;   Gateway\["用户服务 (5173)"] -->|JWT 认证| Browser
-
-&#x20;   UserService\["用户服务 (5173)"] -->|HttpClient| ProductService\["商品服务 (5002)"]
-
-&#x20;   UserService -->|HttpClient| OrderService\["订单服务 (5003)"]
-
-&#x20;   UserService -->|HttpClient| PaymentService\["支付服务 (5004)"]
-
-&#x20;   PaymentService -->|HttpClient| OrderService
-
-&#x20;   OrderService -->|HttpClient| ProductService
-
-
-
-&#x20;   UserDB\["SQL Server: UserDb"] --- UserService
-
-&#x20;   ProductDB\["SQL Server: ProductDb"] --- ProductService
-
-&#x20;   OrderDB\["SQL Server: OrderDb"] --- OrderService
-
+    UserDB["SQL Server: UserDb"] --- UserService
+    ProductDB["SQL Server: ProductDb"] --- ProductService
+    OrderDB["SQL Server: OrderDb"] --- OrderService
+```
