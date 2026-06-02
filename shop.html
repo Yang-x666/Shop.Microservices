@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微商城</title>
+    <style>
+        body { font-family: Arial; max-width: 800px; margin: 20px auto; }
+        .hidden { display: none; }
+        .card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        button { background: #007bff; color: white; border: none; padding: 8px 16px; cursor: pointer; border-radius: 3px; }
+        button:hover { background: #0056b3; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>🛒 微商城（微服务版）</h1>
+
+    <!-- 登录/注册区域 -->
+    <div id="auth-section">
+        <h2>登录</h2>
+        <input type="text" id="username" placeholder="用户名" value="testuser">
+        <input type="password" id="password" placeholder="密码" value="123456">
+        <br><br>
+        <button onclick="register()">注册</button>
+        <button onclick="login()">登录</button>
+        <p id="auth-message"></p>
+    </div>
+
+    <!-- 已登录后的商品区域 -->
+    <div id="shop-section" class="hidden">
+        <h2>商品列表</h2>
+        <div id="products"></div>
+        <h2>我的操作</h2>
+        <p id="user-info"></p>
+        <button onclick="loadProducts()">刷新商品</button>
+        <h3>下单</h3>
+        <input type="text" id="productId" placeholder="商品ID">
+        <input type="number" id="quantity" value="1" min="1">
+        <button onclick="createOrder()">下单</button>
+        <p id="order-message"></p>
+        <h3>支付</h3>
+        <input type="text" id="orderId" placeholder="订单ID">
+        <button onclick="payOrder()">支付</button>
+        <p id="pay-message"></p>
+    </div>
+
+    <script>
+        // 配置 API 地址（请根据实际情况修改端口）
+        const USER_API = 'http://localhost:5173/api/auth';
+        let token = '';
+
+        function showMessage(elementId, msg, isError = false) {
+            document.getElementById(elementId).textContent = msg;
+            document.getElementById(elementId).className = isError ? 'error' : 'success';
+        }
+
+        // 注册
+        async function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const res = await fetch(`${USER_API}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, email: username + '@test.com' })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showMessage('auth-message', '注册成功，请登录');
+            } else {
+                showMessage('auth-message', data.message || '注册失败', true);
+            }
+        }
+
+        // 登录
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const res = await fetch(`${USER_API}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                token = data.token;
+                document.getElementById('auth-section').classList.add('hidden');
+                document.getElementById('shop-section').classList.remove('hidden');
+                document.getElementById('user-info').textContent = `已登录：${username}`;
+                loadProducts();
+            } else {
+                showMessage('auth-message', data.message || '登录失败', true);
+            }
+        }
+
+        // 加载商品列表
+        async function loadProducts() {
+            const res = await fetch(`${USER_API}/products`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const products = await res.json();
+            const container = document.getElementById('products');
+            container.innerHTML = '';
+            products.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <strong>${p.name}</strong> (${p.category})<br>
+                    价格：¥${p.price.toFixed(2)} | 库存：${p.stock}<br>
+                    描述：${p.description}<br>
+                    <small>ID: ${p.id}</small>
+                    <br>
+                    <button onclick="buy('${p.id}')">购买一个</button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // 快速购买一个
+        function buy(productId) {
+            document.getElementById('productId').value = productId;
+            document.getElementById('quantity').value = 1;
+        }
+
+        // 下单
+        async function createOrder() {
+            const productId = document.getElementById('productId').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+            if (!productId) { showMessage('order-message', '请选择商品', true); return; }
+            const res = await fetch(`${USER_API}/orders/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ productId, quantity })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showMessage('order-message', `下单成功！订单ID：${data.orderId}，金额：¥${data.totalPrice}`);
+                document.getElementById('orderId').value = data.orderId;
+            } else {
+                showMessage('order-message', JSON.stringify(data), true);
+            }
+        }
+
+        // 支付
+        async function payOrder() {
+            const orderId = document.getElementById('orderId').value;
+            if (!orderId) { showMessage('pay-message', '请先下单获取订单ID', true); return; }
+            const res = await fetch(`${USER_API}/orders/pay`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ orderId })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showMessage('pay-message', `支付成功！状态：${data.status}`);
+                loadProducts(); // 刷新库存显示
+            } else {
+                showMessage('pay-message', JSON.stringify(data), true);
+            }
+        }
+    </script>
+</body>
+</html>
